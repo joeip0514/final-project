@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>受託方控制台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>受託方控制台</h1>
+            <nav>
+                <a href="/dashboard" class="active">控制台</a>
+                <a href="#" id="availableTab">可用項目</a>
+                <a href="#" id="myProjectsTab">我的項目</a>
+                <a href="#" id="historyTab">歷史記錄</a>
+                <a href="/logout">登出</a>
+            </nav>
+        </header>
+        
+        <main>
+            <div id="dashboardContent">
+                <div class="dashboard-section">
+                    <h2>可用項目</h2>
+                    <div id="availableProjectsList"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Quote Modal -->
+    <div id="quoteModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeQuoteModal()">&times;</span>
+            <h2>提交報價</h2>
+            <form id="quoteForm">
+                <input type="hidden" id="quoteProjectId">
+                <div class="form-group">
+                    <label for="quoteAmount">報價金額（元）</label>
+                    <input type="number" id="quoteAmount" step="0.01" required>
+                </div>
+                <div class="form-group">
+                    <label for="quoteMessage">備註訊息</label>
+                    <textarea id="quoteMessage" rows="4" placeholder="添加任何額外資訊..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">提交報價</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Messages Modal -->
+    <div id="messagesModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeMessagesModal()">&times;</span>
+            <h2 id="messagesTitle">項目訊息</h2>
+            <div id="messagesContainer"></div>
+            <form id="messageForm">
+                <input type="hidden" id="messageProjectId">
+                <div class="form-group">
+                    <textarea id="messageContent" rows="3" placeholder="輸入您的訊息..." required></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">發送訊息</button>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Upload Closure Modal -->
+    <div id="uploadModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeUploadModal()">&times;</span>
+            <h2>上傳結案文件</h2>
+            <form id="uploadForm" enctype="multipart/form-data">
+                <input type="hidden" id="uploadProjectId">
+                <div class="form-group">
+                    <label for="closureFile">選擇文件</label>
+                    <input type="file" id="closureFile" required>
+                </div>
+                <button type="submit" class="btn btn-primary">上傳</button>
+            </form>
+        </div>
+    </div>
+    
+    <script src="/static/recipient.js"></script>
+</body>
+</html>
+
