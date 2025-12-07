@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>註冊 - 項目委託平台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>項目委託平台</h1>
+            <nav>
+                <a href="/">首頁</a>
+                <a href="/login">登入</a>
+                <a href="/register" class="active">註冊</a>
+            </nav>
+        </header>
+        
+        <main class="auth-container">
+            <div class="auth-card">
+                <h2>創建帳號</h2>
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="username">用戶名</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="email">電子郵件</label>
+                        <input type="email" id="email" name="email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">密碼</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="role">我是：</label>
+                        <select id="role" name="role" required>
+                            <option value="">選擇角色</option>
+                            <option value="delegator">委託方（我要委託項目）</option>
+                            <option value="recipient">受託方（我要接收項目）</option>
+                        </select>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">註冊</button>
+                </form>
+                
+                <div id="message" class="message"></div>
+                
+                <p class="auth-link">已有帳號？ <a href="/login">在此登入</a></p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/static/auth.js"></script>
+</body>
+</html>
+
