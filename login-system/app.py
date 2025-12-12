@@ -154,6 +154,31 @@ class ClosureFile(Base):
     project = relationship('Project', back_populates='closure_files')
     uploader = relationship('User', back_populates='uploaded_files')
 
+### 新增功能：評價系統模型 ###
+class Review(Base):
+    __tablename__ = 'review'
+    
+    id = Column(Integer, primary_key=True)
+    project_id = Column(Integer, ForeignKey('project.id'), nullable=False)
+    reviewer_id = Column(Integer, ForeignKey('user.id'), nullable=False) # 誰寫的評價
+    reviewee_id = Column(Integer, ForeignKey('user.id'), nullable=False) # 被評價的人
+    
+    # 根據角色定義不同維度意義
+    # 甲方受評: 1=需求合理性, 2=驗收難度, 3=合作態度
+    # 乙方受評: 1=產出品質, 2=執行效率, 3=合作態度
+    dimension_1 = Column(Integer, nullable=False) 
+    dimension_2 = Column(Integer, nullable=False)
+    dimension_3 = Column(Integer, nullable=False)
+    average_rating = Column(Float, nullable=False)
+    
+    comment = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    project = relationship('Project')
+    reviewer = relationship('User', foreign_keys=[reviewer_id])
+    reviewee = relationship('User', foreign_keys=[reviewee_id])
+
+
 # Create tables
 Base.metadata.create_all(bind=engine)
 
@@ -197,6 +222,15 @@ def migrate_database():
         except Exception as e:
             print(f"創建 proposal_file 表時出錯: {e}")
 
+    # 檢查是否存在 review 表，如果不存在則創建
+    if 'review' not in inspector.get_table_names():
+        print("正在創建 review 表...")
+        try:
+            Review.__table__.create(bind=engine, checkfirst=True)
+            print("✓ review 表已創建")
+        except Exception as e:
+            print(f"創建 review 表時出錯: {e}")
+
 # 執行遷移
 try:
     migrate_database()
@@ -212,19 +246,34 @@ def get_db():
     finally:
         db.close()
 
+### 新增功能：計算評價 Helper 函數 ###
+def get_user_rating_stats(user_id: int, db: Session):
+    """計算用戶收到的平均評價與取得最近評論"""
+    reviews = db.query(Review).filter(Review.reviewee_id == user_id).all()
+    if not reviews:
+        return {'average': 0.0, 'count': 0, 'reviews': []}
+    
+    total_avg = sum(r.average_rating for r in reviews) / len(reviews)
+    
+    # 取得最近 5 則評論
+    recent_reviews = [{
+        'comment': r.comment,
+        'average': r.average_rating,
+        'created_at': r.created_at.isoformat()
+    } for r in sorted(reviews, key=lambda x: x.created_at, reverse=True)[:5]]
+    
+    return {
+        'average': round(total_avg, 1),
+        'count': len(reviews),
+        'reviews': recent_reviews
+    }
+
 # Helper functions
 def verify_password(plain_password, hashed_password):
-    """
-    驗證密碼，支持多種哈希格式：
-    - bcrypt (新格式)
-    - pbkdf2:sha256 (werkzeug/Flask 格式)
-    """
-    # 首先嘗試使用 passlib 驗證（支持 bcrypt 和 pbkdf2_sha256）
+    """驗證密碼"""
     try:
         return pwd_context.verify(plain_password, hashed_password)
     except Exception:
-        # 如果 passlib 無法識別，嘗試使用 werkzeug 格式
-        # werkzeug 的 check_password_hash 參數順序是 (hash, password)
         try:
             from werkzeug.security import check_password_hash
             return check_password_hash(hashed_password, plain_password)
@@ -232,7 +281,7 @@ def verify_password(plain_password, hashed_password):
             return False
 
 def get_password_hash(password):
-    """生成密碼哈希，使用 bcrypt（新格式）"""
+    """生成密碼哈希"""
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
@@ -380,22 +429,16 @@ async def create_project(request: Request, current_user: User = Depends(require_
     if data.get('deadline'):
         try:
             deadline_str = data.get('deadline')
-            # 處理不同的日期格式
             if deadline_str.endswith('Z'):
                 deadline_str = deadline_str.replace('Z', '+00:00')
             elif '+' not in deadline_str and '-' not in deadline_str[-6:] and 'T' in deadline_str:
-                # 如果沒有時區信息，假設是UTC
                 deadline_str = deadline_str + '+00:00'
             
-            # 解析日期
             if '+' in deadline_str or deadline_str.endswith('Z'):
-                # 帶時區的格式
                 deadline = datetime.fromisoformat(deadline_str)
-                # 轉換為UTC時間（naive datetime）
                 if deadline.tzinfo:
                     deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
             else:
-                # 不帶時區的格式，直接解析
                 deadline = datetime.fromisoformat(deadline_str)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid deadline format: {str(e)}")
@@ -448,22 +491,16 @@ async def update_project(project_id: int, request: Request, current_user: User =
         if data.get('deadline'):
             try:
                 deadline_str = data.get('deadline')
-                # 處理不同的日期格式
                 if deadline_str.endswith('Z'):
                     deadline_str = deadline_str.replace('Z', '+00:00')
                 elif '+' not in deadline_str and '-' not in deadline_str[-6:] and 'T' in deadline_str:
-                    # 如果沒有時區信息，假設是UTC
                     deadline_str = deadline_str + '+00:00'
                 
-                # 解析日期
                 if '+' in deadline_str or deadline_str.endswith('Z'):
-                    # 帶時區的格式
                     deadline = datetime.fromisoformat(deadline_str)
-                    # 轉換為UTC時間（naive datetime）
                     if deadline.tzinfo:
                         deadline = deadline.astimezone(timezone.utc).replace(tzinfo=None)
                 else:
-                    # 不帶時區的格式，直接解析
                     deadline = datetime.fromisoformat(deadline_str)
                 project.deadline = deadline
             except Exception as e:
@@ -495,20 +532,28 @@ async def get_quotes(project_id: int, current_user: User = Depends(require_role(
         raise HTTPException(status_code=403, detail="Forbidden")
     
     quotes = db.query(Quote).filter(Quote.project_id == project_id).all()
-    return [{
-        'id': q.id,
-        'recipient_name': q.recipient.username,
-        'amount': q.amount,
-        'message': q.message,
-        'status': q.status,
-        'created_at': q.created_at.isoformat(),
-        'proposal_file': {
-            'id': q.proposal_file.id,
-            'original_filename': q.proposal_file.original_filename,
-            'filename': q.proposal_file.filename,
-            'created_at': q.proposal_file.created_at.isoformat()
-        } if q.proposal_file else None
-    } for q in quotes]
+    
+    ### 新增功能：注入乙方評價數據 ###
+    result = []
+    for q in quotes:
+        stats = get_user_rating_stats(q.recipient_id, db)
+        result.append({
+            'id': q.id,
+            'recipient_name': q.recipient.username,
+            'recipient_id': q.recipient_id,
+            'recipient_rating': stats,  # 評價數據
+            'amount': q.amount,
+            'message': q.message,
+            'status': q.status,
+            'created_at': q.created_at.isoformat(),
+            'proposal_file': {
+                'id': q.proposal_file.id,
+                'original_filename': q.proposal_file.original_filename,
+                'filename': q.proposal_file.filename,
+                'created_at': q.proposal_file.created_at.isoformat()
+            } if q.proposal_file else None
+        })
+    return result
 
 @app.post("/api/projects/{project_id}/select_delegate")
 async def select_delegate(project_id: int, request: Request, current_user: User = Depends(require_role("delegator")), db: Session = Depends(get_db)):
@@ -518,7 +563,6 @@ async def select_delegate(project_id: int, request: Request, current_user: User 
     if project.delegator_id != current_user.id:
         raise HTTPException(status_code=403, detail="Forbidden")
     
-    # 檢查是否已過截止日期
     if project.deadline and datetime.utcnow() < project.deadline:
         raise HTTPException(status_code=400, detail="Cannot select delegate before deadline")
     
@@ -535,7 +579,6 @@ async def select_delegate(project_id: int, request: Request, current_user: User 
     project.status = 'active'
     quote.status = 'accepted'
     
-    # Reject other quotes
     db.query(Quote).filter(and_(Quote.project_id == project_id, Quote.id != quote_id)).update({'status': 'rejected'}, synchronize_session=False)
     
     db.commit()
@@ -547,20 +590,15 @@ async def get_closure_files(project_id: int, current_user: User = Depends(requir
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # 驗證用戶權限
-    # 委託方可以查看自己項目的結案文件
     if current_user.role == 'delegator':
         if project.delegator_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
-    # 受託方可以查看自己被委託項目的結案文件
     elif current_user.role == 'recipient':
         if project.delegate_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
     else:
         raise HTTPException(status_code=403, detail="Forbidden")
     
-    # 查詢文件，處理可能為NULL的version字段
-    # 使用COALESCE將NULL值轉換為0，確保排序正常
     from sqlalchemy import func
     files = db.query(ClosureFile).filter(ClosureFile.project_id == project_id).order_by(
         desc(func.coalesce(ClosureFile.version, 0)),
@@ -570,7 +608,7 @@ async def get_closure_files(project_id: int, current_user: User = Depends(requir
         'id': f.id,
         'filename': f.filename,
         'original_filename': f.original_filename,
-        'version': f.version if f.version is not None else 1,  # 處理舊記錄可能沒有version的情況
+        'version': f.version if f.version is not None else 1,
         'status': f.status,
         'uploader_name': f.uploader.username if f.uploader else '未知',
         'created_at': f.created_at.isoformat() if f.created_at else datetime.utcnow().isoformat()
@@ -578,13 +616,11 @@ async def get_closure_files(project_id: int, current_user: User = Depends(requir
 
 @app.get("/api/files/{file_id}/download")
 async def download_file(file_id: int, file_type: str = "closure", current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
-    """下載文件（支持提案文件和結案文件）"""
     if file_type == "proposal":
         file_record = db.query(ProposalFile).filter(ProposalFile.id == file_id).first()
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found")
         
-        # 驗證權限：提案者本人或項目委託方可以下載
         quote = db.query(Quote).filter(Quote.id == file_record.quote_id).first()
         project = db.query(Project).filter(Project.id == file_record.project_id).first()
         
@@ -595,7 +631,6 @@ async def download_file(file_id: int, file_type: str = "closure", current_user: 
         if not file_record:
             raise HTTPException(status_code=404, detail="File not found")
         
-        # 驗證權限：上傳者本人或項目委託方可以下載
         project = db.query(Project).filter(Project.id == file_record.project_id).first()
         if current_user.id != file_record.uploader_id and (current_user.role != 'delegator' or project.delegator_id != current_user.id):
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -620,29 +655,73 @@ async def close_project(project_id: int, request: Request, current_user: User = 
         raise HTTPException(status_code=403, detail="Forbidden")
     
     data = await request.json()
-    action = data.get('action')  # 'accept' or 'return'
-    file_id = data.get('file_id')  # 可選：指定接受的文件ID
+    action = data.get('action')
+    file_id = data.get('file_id')
     
     if action == 'accept':
         project.status = 'closed'
         if file_id:
-            # 接受指定版本的文件
             file_record = db.query(ClosureFile).filter(ClosureFile.id == file_id).first()
             if file_record and file_record.project_id == project_id:
                 file_record.status = 'accepted'
         else:
-            # 接受所有pending的文件
             db.query(ClosureFile).filter(and_(ClosureFile.project_id == project_id, ClosureFile.status == 'pending')).update({'status': 'accepted'}, synchronize_session=False)
     elif action == 'return':
         if file_id:
-            # 退回指定版本的文件
             file_record = db.query(ClosureFile).filter(ClosureFile.id == file_id).first()
             if file_record and file_record.project_id == project_id:
                 file_record.status = 'returned'
         else:
-            # 退回所有pending的文件
             db.query(ClosureFile).filter(and_(ClosureFile.project_id == project_id, ClosureFile.status == 'pending')).update({'status': 'returned'}, synchronize_session=False)
     
+    db.commit()
+    return JSONResponse(content={'success': True})
+
+### 新增功能：提交評價 API ###
+@app.post("/api/projects/{project_id}/review")
+async def submit_review(project_id: int, request: Request, current_user: User = Depends(require_auth), db: Session = Depends(get_db)):
+    project = db.query(Project).filter(Project.id == project_id).first()
+    if not project or project.status != 'closed':
+        raise HTTPException(status_code=400, detail="Project must be closed to submit review")
+    
+    # 確認用戶是否為專案關係人
+    is_delegator = project.delegator_id == current_user.id
+    is_recipient = project.delegate_id == current_user.id
+    
+    if not (is_delegator or is_recipient):
+        raise HTTPException(status_code=403, detail="Forbidden")
+        
+    # 決定被評價者
+    target_user_id = project.delegate_id if is_delegator else project.delegator_id
+    
+    # 檢查是否已經評價過
+    existing = db.query(Review).filter(
+        Review.project_id == project_id,
+        Review.reviewer_id == current_user.id
+    ).first()
+    
+    if existing:
+        raise HTTPException(status_code=400, detail="You have already reviewed this project")
+    
+    data = await request.json()
+    dim1 = int(data.get('dimension_1', 5))
+    dim2 = int(data.get('dimension_2', 5))
+    dim3 = int(data.get('dimension_3', 5))
+    comment = data.get('comment', '')
+    
+    avg = (dim1 + dim2 + dim3) / 3.0
+    
+    review = Review(
+        project_id=project_id,
+        reviewer_id=current_user.id,
+        reviewee_id=target_user_id,
+        dimension_1=dim1,
+        dimension_2=dim2,
+        dimension_3=dim3,
+        average_rating=avg,
+        comment=comment
+    )
+    db.add(review)
     db.commit()
     return JSONResponse(content={'success': True})
 
@@ -650,7 +729,6 @@ async def close_project(project_id: int, request: Request, current_user: User = 
 @app.get("/api/available_projects")
 async def available_projects(current_user: User = Depends(require_role("recipient")), db: Session = Depends(get_db)):
     now = datetime.utcnow()
-    # 只顯示pending狀態且未過截止日期的項目
     projects = db.query(Project).filter(
         Project.status == 'pending'
     ).filter(
@@ -658,16 +736,22 @@ async def available_projects(current_user: User = Depends(require_role("recipien
     ).all()
     user_quotes = {q.project_id for q in db.query(Quote).filter(Quote.recipient_id == current_user.id).all()}
     
-    return [{
-        'id': p.id,
-        'title': p.title,
-        'description': p.description,
-        'delegator_name': p.delegator.username,
-        'deadline': p.deadline.isoformat() if p.deadline else None,
-        'created_at': p.created_at.isoformat(),
-        'has_quoted': p.id in user_quotes,
-        'quote_count': len(p.quotes)
-    } for p in projects]
+    ### 新增功能：注入甲方評價數據 ###
+    result = []
+    for p in projects:
+        stats = get_user_rating_stats(p.delegator_id, db)
+        result.append({
+            'id': p.id,
+            'title': p.title,
+            'description': p.description,
+            'delegator_name': p.delegator.username,
+            'delegator_rating': stats, # 評價數據
+            'deadline': p.deadline.isoformat() if p.deadline else None,
+            'created_at': p.created_at.isoformat(),
+            'has_quoted': p.id in user_quotes,
+            'quote_count': len(p.quotes)
+        })
+    return result
 
 @app.post("/api/projects/{project_id}/quote")
 async def submit_quote(project_id: int, request: Request, current_user: User = Depends(require_role("recipient")), db: Session = Depends(get_db)):
@@ -677,11 +761,9 @@ async def submit_quote(project_id: int, request: Request, current_user: User = D
     if project.status != 'pending':
         raise HTTPException(status_code=400, detail="Project is not available for quoting")
     
-    # 檢查是否已過截止日期
     if project.deadline and datetime.utcnow() >= project.deadline:
         raise HTTPException(status_code=400, detail="Project deadline has passed")
     
-    # Check if already quoted
     existing = db.query(Quote).filter(Quote.project_id == project_id, Quote.recipient_id == current_user.id).first()
     if existing:
         raise HTTPException(status_code=400, detail="You have already submitted a quote for this project")
@@ -715,37 +797,30 @@ async def upload_proposal_file(
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # 檢查是否已過截止日期
     if project.deadline and datetime.utcnow() >= project.deadline:
         raise HTTPException(status_code=400, detail="Project deadline has passed")
     
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file selected")
     
-    # 檢查文件格式（只允許PDF）
     if not file.filename.lower().endswith('.pdf'):
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
     
-    # 檢查文件內容類型
     content_type = file.content_type
     if content_type and content_type != 'application/pdf':
         raise HTTPException(status_code=400, detail="Only PDF files are allowed")
     
-    # 生成唯一檔名（避免覆蓋）
     timestamp = datetime.now().timestamp()
     original_filename = secure_filename(file.filename)
     safe_filename = f"proposal_{quote_id}_{current_user.id}_{timestamp}_{original_filename}"
     filepath = os.path.join("uploads", safe_filename)
     
-    # 保存文件
     with open(filepath, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
     
-    # 檢查是否已有提案文件，如果有則刪除舊的（但保留文件）
     existing_file = db.query(ProposalFile).filter(ProposalFile.quote_id == quote_id).first()
     if existing_file:
-        # 不刪除文件，只更新記錄
         existing_file.filename = safe_filename
         existing_file.original_filename = original_filename
         existing_file.created_at = datetime.utcnow()
@@ -793,7 +868,6 @@ async def upload_closure_file(
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file selected")
     
-    # 計算版本號（獲取該項目當前最高版本號+1）
     max_version = db.query(ClosureFile).filter(
         ClosureFile.project_id == project_id,
         ClosureFile.uploader_id == current_user.id
@@ -801,13 +875,11 @@ async def upload_closure_file(
     
     version = (max_version.version + 1) if max_version else 1
     
-    # 生成唯一檔名（包含版本號，避免覆蓋）
     timestamp = datetime.now().timestamp()
     original_filename = secure_filename(file.filename)
     safe_filename = f"closure_{project_id}_{current_user.id}_v{version}_{timestamp}_{original_filename}"
     filepath = os.path.join("uploads", safe_filename)
     
-    # Save file
     with open(filepath, "wb") as buffer:
         content = await file.read()
         buffer.write(content)
@@ -833,7 +905,6 @@ async def get_messages(project_id: int, current_user: User = Depends(require_aut
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Verify user is part of the project
     if current_user.role == 'delegator':
         if project.delegator_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -856,7 +927,6 @@ async def create_message(project_id: int, request: Request, current_user: User =
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     
-    # Verify user is part of the project and determine receiver
     if current_user.role == 'delegator':
         if project.delegator_id != current_user.id:
             raise HTTPException(status_code=403, detail="Forbidden")
@@ -912,7 +982,6 @@ if __name__ == '__main__':
     import sys
     
     def find_free_port(start_port=5000, max_attempts=10):
-        """尋找可用端口"""
         for port in range(start_port, start_port + max_attempts):
             try:
                 with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -922,7 +991,6 @@ if __name__ == '__main__':
                 continue
         return None
     
-    # 嘗試使用端口 5000，如果被佔用則尋找其他可用端口
     port = 5000
     if len(sys.argv) > 1:
         try:
@@ -930,7 +998,6 @@ if __name__ == '__main__':
         except ValueError:
             print(f"Invalid port number: {sys.argv[1]}. Using default port 5000.")
     
-    # 檢查端口是否可用
     test_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     try:
         test_socket.bind(('127.0.0.1', port))
@@ -957,9 +1024,6 @@ if __name__ == '__main__':
     print()
     
     try:
-        # 使用 127.0.0.1 而不是 0.0.0.0 以避免權限問題
-        # 如果需要從網絡訪問，可以改為 "0.0.0.0"，但可能需要管理員權限
-        # 使用導入字符串 "app:app" 以支持 reload 功能
         uvicorn.run(
             "app:app", 
             host="127.0.0.1", 
@@ -967,30 +1031,6 @@ if __name__ == '__main__':
             reload=True,
             log_level="info"
         )
-    except PermissionError:
-        print("\n" + "=" * 50)
-        print("ERROR: Permission denied!")
-        print("=" * 50)
-        print("The server requires administrator privileges to bind to this port.")
-        print("\nSolutions:")
-        print("1. Run as administrator (right-click and 'Run as administrator')")
-        print("2. Use a different port (e.g., python app.py 8000)")
-        print("3. Change host to 127.0.0.1 (already set)")
-        print("=" * 50)
+    except Exception as e:
+        print(f"Error starting server: {e}")
         sys.exit(1)
-    except OSError as e:
-        print("\n" + "=" * 50)
-        print(f"ERROR: Could not start server on port {port}")
-        print("=" * 50)
-        print(f"Error details: {e}")
-        print("\nTrying alternative port 8000...")
-        print("=" * 50)
-        try:
-            uvicorn.run("app:app", host="127.0.0.1", port=8000, reload=True, log_level="info")
-        except Exception as e2:
-            print(f"\nFailed to start on port 8000: {e2}")
-            print("\nPlease check:")
-            print("1. No other application is using these ports")
-            print("2. Firewall is not blocking the connection")
-            print("3. You have necessary permissions")
-            sys.exit(1)

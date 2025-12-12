@@ -4,6 +4,10 @@ let currentView = 'available';
 document.addEventListener('DOMContentLoaded', function() {
     loadAvailableProjects();
     setupEventListeners();
+    
+    // ### 新增: 綁定評價表單提交事件 ###
+    const reviewForm = document.getElementById('reviewForm');
+    if(reviewForm) reviewForm.addEventListener('submit', submitReview);
 });
 
 function setupEventListeners() {
@@ -56,10 +60,13 @@ function createAvailableProjectCard(project) {
     const card = document.createElement('div');
     card.className = 'project-card';
     
+    // ### 新增: 顯示甲方評價星星，可點擊查看詳情 ###
+    const ratingHtml = `<span style="cursor:pointer; color:#f39c12; font-size:0.9em; margin-left:8px;" onclick='showUserReviews(${JSON.stringify(project.delegator_rating.reviews)}, ${project.delegator_rating.count}, ${project.delegator_rating.average})'>★ ${project.delegator_rating.average} (${project.delegator_rating.count})</span>`;
+    
     card.innerHTML = `
         <h3>${project.title}</h3>
         <p>${project.description}</p>
-        <p><strong>委託方：</strong> ${project.delegator_name}</p>
+        <p><strong>委託方：</strong> ${project.delegator_name} ${ratingHtml}</p>
         <p><strong>目前報價數：</strong> ${project.quote_count ?? 0}</p>
         ${project.deadline ? `<p><strong>提案截止期限：</strong> ${new Date(project.deadline).toLocaleString()}</p>` : ''}
         <p><strong>發布時間：</strong> ${new Date(project.created_at).toLocaleDateString()}</p>
@@ -114,6 +121,12 @@ function createMyProjectCard(project) {
         'closed': '已結案'
     };
     
+    // ### 新增: 判斷是否顯示評價按鈕 ###
+    let reviewBtn = '';
+    if (project.status === 'closed') {
+        reviewBtn = `<button class="btn btn-warning" onclick="openDelegatorReview(${project.id})">評價委託方</button>`;
+    }
+    
     card.innerHTML = `
         <h3>${project.title} <span class="status-badge ${statusClass}">${statusText[project.status] || project.status}</span></h3>
         <p>${project.description}</p>
@@ -124,6 +137,7 @@ function createMyProjectCard(project) {
             ${project.status === 'active' ? `
                 <button class="btn btn-success" onclick="showUploadModal(${project.id})">上傳結案文件</button>
             ` : ''}
+            ${reviewBtn}
         </div>
     `;
     
@@ -378,6 +392,83 @@ function closeUploadModal() {
     document.getElementById('uploadModal').style.display = 'none';
 }
 
+// ### 新增功能：評價系統相關邏輯 ###
+
+// 顯示評價歷史 (共用)
+function showUserReviews(reviews, count, avg) {
+    const container = document.getElementById('reviewsHistoryList');
+    container.innerHTML = `
+        <div class="review-summary">
+            <h3>總評分: ${avg} ⭐ (${count} 次評價)</h3>
+        </div>
+        <hr>
+    `;
+    
+    if (reviews.length === 0) {
+        container.innerHTML += '<p>尚無詳細評論。</p>';
+    } else {
+        reviews.forEach(r => {
+            container.innerHTML += `
+                <div class="review-item" style="margin-bottom:15px; border-bottom:1px solid #eee; padding-bottom:10px;">
+                    <div><strong>評分:</strong> ${r.average} ⭐</div>
+                    <p>${r.comment}</p>
+                    <small style="color:#888;">${new Date(r.created_at).toLocaleDateString()}</small>
+                </div>
+            `;
+        });
+    }
+    document.getElementById('viewReviewsModal').style.display = 'block';
+}
+
+// 關閉評價視窗
+function closeReviewModal() {
+    document.getElementById('reviewModal').style.display = 'none';
+}
+
+// 打開評價委託方視窗 (乙方用)
+function openDelegatorReview(projectId) {
+    document.getElementById('reviewProjectId').value = projectId;
+    // 設置乙方評甲方的三個維度
+    document.getElementById('labelDim1').textContent = '需求合理性';
+    document.getElementById('labelDim2').textContent = '驗收難度';
+    document.getElementById('labelDim3').textContent = '合作態度';
+    document.getElementById('reviewModal').style.display = 'block';
+}
+
+// 處理提交評價
+async function submitReview(e) {
+    e.preventDefault();
+    const projectId = document.getElementById('reviewProjectId').value;
+    
+    const body = {
+        dimension_1: document.getElementById('dim1').value,
+        dimension_2: document.getElementById('dim2').value,
+        dimension_3: document.getElementById('dim3').value,
+        comment: document.getElementById('reviewComment').value
+    };
+    
+    try {
+        const response = await fetch(`/api/projects/${projectId}/review`, {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body)
+        });
+        const data = await response.json();
+        if(data.success) {
+            alert('評價提交成功！');
+            closeReviewModal();
+            // 重新載入以更新按鈕狀態
+            if(currentView === 'history') loadHistory(); 
+            else loadMyProjects();
+        } else {
+            alert(data.error || '提交失敗，您可能已經評價過此項目。');
+        }
+    } catch(err) {
+        alert('發生錯誤');
+        console.error(err);
+    }
+}
+
 // Close modals when clicking outside
 window.onclick = function(event) {
     const modals = document.getElementsByClassName('modal');
@@ -387,4 +478,3 @@ window.onclick = function(event) {
         }
     }
 }
-

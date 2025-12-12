@@ -29,7 +29,6 @@
         </main>
     </div>
     
-    <!-- Quote Modal -->
     <div id="quoteModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeQuoteModal()">&times;</span>
@@ -54,7 +53,6 @@
         </div>
     </div>
     
-    <!-- Messages Modal -->
     <div id="messagesModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeMessagesModal()">&times;</span>
@@ -70,7 +68,6 @@
         </div>
     </div>
     
-    <!-- Upload Closure Modal -->
     <div id="uploadModal" class="modal">
         <div class="modal-content">
             <span class="close" onclick="closeUploadModal()">&times;</span>
@@ -87,8 +84,63 @@
             </form>
         </div>
     </div>
+
+    <div id="reviewModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="closeReviewModal()">&times;</span>
+            <h2>評價合作夥伴</h2>
+            <form id="reviewForm">
+                <input type="hidden" id="reviewProjectId">
+                <p id="reviewTargetName">對象：</p>
+                
+                <div class="form-group">
+                    <label id="labelDim1">維度1</label>
+                    <select id="dim1" required>
+                        <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                        <option value="4">⭐⭐⭐⭐ (4)</option>
+                        <option value="3">⭐⭐⭐ (3)</option>
+                        <option value="2">⭐⭐ (2)</option>
+                        <option value="1">⭐ (1)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label id="labelDim2">維度2</label>
+                    <select id="dim2" required>
+                        <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                        <option value="4">⭐⭐⭐⭐ (4)</option>
+                        <option value="3">⭐⭐⭐ (3)</option>
+                        <option value="2">⭐⭐ (2)</option>
+                        <option value="1">⭐ (1)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label id="labelDim3">維度3</label>
+                    <select id="dim3" required>
+                        <option value="5">⭐⭐⭐⭐⭐ (5)</option>
+                        <option value="4">⭐⭐⭐⭐ (4)</option>
+                        <option value="3">⭐⭐⭐ (3)</option>
+                        <option value="2">⭐⭐ (2)</option>
+                        <option value="1">⭐ (1)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label>質性評論 (必填)</label>
+                    <textarea id="reviewComment" rows="4" required placeholder="請描述您的合作體驗..."></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">提交評價</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="viewReviewsModal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="document.getElementById('viewReviewsModal').style.display='none'">&times;</span>
+            <h2>歷史評價</h2>
+            <div id="reviewsHistoryList"></div>
+        </div>
+    </div>
     
     <script src="/static/recipient.js"></script>
 </body>
 </html>
-
