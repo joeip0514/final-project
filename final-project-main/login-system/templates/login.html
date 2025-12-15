@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登入 - 項目委託平台</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>項目委託平台</h1>
+            <nav>
+                <a href="/">首頁</a>
+                <a href="/login" class="active">登入</a>
+                <a href="/register">註冊</a>
+            </nav>
+        </header>
+        
+        <main class="auth-container">
+            <div class="auth-card">
+                <h2>登入</h2>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="username">用戶名</label>
+                        <input type="text" id="username" name="username" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="password">密碼</label>
+                        <input type="password" id="password" name="password" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">登入</button>
+                </form>
+                
+                <div id="message" class="message"></div>
+                
+                <p class="auth-link">沒有帳號？ <a href="/register">在此註冊</a></p>
+            </div>
+        </main>
+    </div>
+    
+    <script src="/static/auth.js"></script>
+</body>
+</html>
+
