@@ -60,8 +60,10 @@ function createAvailableProjectCard(project) {
     const card = document.createElement('div');
     card.className = 'project-card';
     
-    // ### 新增: 顯示甲方評價星星，可點擊查看詳情 ###
-    const ratingHtml = `<span style="cursor:pointer; color:#f39c12; font-size:0.9em; margin-left:8px;" onclick='showUserReviews(${JSON.stringify(project.delegator_rating.reviews)}, ${project.delegator_rating.count}, ${project.delegator_rating.average})'>★ ${project.delegator_rating.average} (${project.delegator_rating.count})</span>`;
+    // ### 修正重點：處理單引號轉義，防止 JS 崩潰 ###
+    // 原本這裡用的是舊代碼，現在已修正
+    const reviewsData = JSON.stringify(project.delegator_rating.reviews).replace(/'/g, "&#39;");
+    const ratingHtml = `<span style="cursor:pointer; color:#f39c12; font-size:0.9em; margin-left:8px;" onclick='showUserReviews(${reviewsData}, ${project.delegator_rating.count}, ${project.delegator_rating.average})'>★ ${project.delegator_rating.average} (${project.delegator_rating.count})</span>`;
     
     card.innerHTML = `
         <h3>${project.title}</h3>

@@ -214,8 +214,9 @@ async function viewQuotes(projectId) {
                 const quoteCard = document.createElement('div');
                 quoteCard.className = 'quote-card';
                 
-                // ### 新增: 顯示乙方評價星星，可點擊查看詳情 ###
-                const ratingHtml = `<span style="cursor:pointer; color:#f39c12; font-size:0.9em; margin-left:8px;" onclick='showUserReviews(${JSON.stringify(quote.recipient_rating.reviews)}, ${quote.recipient_rating.count}, ${quote.recipient_rating.average})'>★ ${quote.recipient_rating.average} (${quote.recipient_rating.count})</span>`;
+                // ### 修正重點：處理單引號轉義，防止 JS 崩潰 ###
+                const reviewsData = JSON.stringify(quote.recipient_rating.reviews).replace(/'/g, "&#39;");
+                const ratingHtml = `<span style="cursor:pointer; color:#f39c12; font-size:0.9em; margin-left:8px;" onclick='showUserReviews(${reviewsData}, ${quote.recipient_rating.count}, ${quote.recipient_rating.average})'>★ ${quote.recipient_rating.average} (${quote.recipient_rating.count})</span>`;
                 
                 quoteCard.innerHTML = `
                     <h4>來自：${quote.recipient_name} ${ratingHtml}</h4>
